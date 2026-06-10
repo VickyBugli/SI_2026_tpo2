@@ -1,0 +1,49 @@
+=== Resultados del Test ===
+Instancias evaluadas: 36
+Instancias correctamente clasificadas: 34
+Precisión: 94.44%
+
+=== Predicciones ===
+  1. Predicción: 1               Real: 1               [OK]
+  2. Predicción: 3               Real: 3               [OK]
+  3. Predicción: 3               Real: 2               [ERROR]
+  4. Predicción: 3               Real: 3               [OK]
+  5. Predicción: 3               Real: 3               [OK]
+  6. Predicción: 3               Real: 3               [OK]
+  7. Predicción: 3               Real: 2               [ERROR]
+  8. Predicción: 3               Real: 3               [OK]
+  9. Predicción: 1               Real: 1               [OK]
+ 10. Predicción: 2               Real: 2               [OK]
+ 11. Predicción: 1               Real: 1               [OK]
+ 12. Predicción: 1               Real: 1               [OK]
+ 13. Predicción: 2               Real: 2               [OK]
+ 14. Predicción: 1               Real: 1               [OK]
+ 15. Predicción: 3               Real: 3               [OK]
+ 16. Predicción: 1               Real: 1               [OK]
+ 17. Predicción: 1               Real: 1               [OK]
+ 18. Predicción: 2               Real: 2               [OK]
+ 19. Predicción: 2               Real: 2               [OK]
+ 20. Predicción: 3               Real: 3               [OK]
+ 21. Predicción: 2               Real: 2               [OK]
+ 22. Predicción: 1               Real: 1               [OK]
+ 23. Predicción: 1               Real: 1               [OK]
+ 24. Predicción: 1               Real: 1               [OK]
+ 25. Predicción: 2               Real: 2               [OK]
+ 26. Predicción: 3               Real: 3               [OK]
+ 27. Predicción: 2               Real: 2               [OK]
+ 28. Predicción: 2               Real: 2               [OK]
+ 29. Predicción: 2               Real: 2               [OK]
+ 30. Predicción: 3               Real: 3               [OK]
+ 31. Predicción: 2               Real: 2               [OK]
+ 32. Predicción: 1               Real: 1               [OK]
+ 33. Predicción: 3               Real: 3               [OK]
+ 34. Predicción: 1               Real: 1               [OK]
+ 35. Predicción: 2               Real: 2               [OK]
+ 36. Predicción: 2               Real: 2               [OK]
+
+
+=== MATRIZ DE CONFUSIÓN ===
+Real/Pred       1      2      3
+         1     12      0      0
+         2      0     12      2
+         3      0      0     10

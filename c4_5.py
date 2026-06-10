@@ -15,6 +15,16 @@ class Nodo:
         self.etiqueta = etiqueta
         self.umbral = umbral
         self.hijos = []
+    
+    def predecir(self, instancia):
+        if self.esHoja:
+            return self.etiqueta
+        else:
+            valor = instancia[self.etiqueta]
+            if valor <= self.umbral:
+                return self.hijos[0].predecir(instancia)
+            else:
+                return self.hijos[1].predecir(instancia)
 
 # CLASE PRINCIPAL C4_5 -------------------------
 
@@ -99,7 +109,7 @@ class C45:
             writer = csv.DictWriter(f, fieldnames=datos[0].keys()) # crea csv escritor
             writer.writeheader() # escribe los atributos
             writer.writerows(datos) # escribe las filas
-        print(f"  → Guardado: {path}")
+        print(f"  --> Guardado: {path}")
 
 # Construccion del arbol
 # recursivo desde la raiz
@@ -254,8 +264,33 @@ class C45:
             return 0
         return math.log(x, 2)
 
-# PARTE DE TESTS --------------------------------------
+# PREDICCIÓN --------------------------------------
+    def clasificar(self, test_data):
+        """Evalúa el árbol en el set de test y retorna un reporte con precisión, matriz de confusión, etc."""
+        correctas = 0
+        total = len(test_data)
+        resultados = []
+        matriz_confusion = {} # inicializa matriz de confusion
+        
+        for inst in test_data:
+            real = inst["class"]
+            pred = self.arbol.predecir(inst)
+            resultados.append((pred, real))
+            
+            if real not in matriz_confusion:
+                matriz_confusion[real] = {}
 
+
+            if pred not in matriz_confusion[real]:
+                matriz_confusion[real][pred] = 0
+            matriz_confusion[real][pred] += 1
+
+            if pred == inst["class"]:
+                correctas += 1
+
+        precision = correctas / len(test_data) if test_data else 0
+
+        return {"precision": precision, "correctas": correctas, "matriz_confusion": matriz_confusion, "resultados": resultados, "total": total}
 
 # -----------------------------------------------------
 
@@ -269,10 +304,10 @@ class C45:
         if nivel > max_nivel:
             return
         if node.esHoja:
-            print(indent + f"[HOJA] → Clase {int(node.etiqueta)}")
+            print(indent + f"[HOJA] --> Clase {int(node.etiqueta)}")
         else:
             print(indent + f"{node.etiqueta} <= {node.umbral:.4f}")
-            self.printNode(node.hijos[0], indent + "│   ", nivel+1, max_nivel)
+            self.printNode(node.hijos[0], indent + "|   ", nivel+1, max_nivel)
             self.printNode(node.hijos[1], indent + "    ", nivel+1, max_nivel)
  
     def contarNodos(self, node=None):
@@ -292,6 +327,67 @@ class C45:
         if node.esHoja:
             return 0
         return 1 + max(self.profundidad(node.hijos[0]), self.profundidad(node.hijos[1]))
+    
+
+# Guardar y mostrar resultados ===============================
+    def guardarResultados(self, reporte, archivo):
+        with open(archivo, "w", encoding="utf-8") as f:
+
+            f.write("=== Resultados del Test ===\n")
+            f.write(f"Instancias evaluadas: {reporte['total']}\n")
+            f.write(f"Instancias correctamente clasificadas: {reporte['correctas']}\n")
+            f.write(f"Precisión: {reporte['precision'] * 100:.2f}%\n\n")
+
+            f.write("=== Predicciones ===\n")
+            for i, (pred, real) in enumerate(reporte["resultados"], start=1):
+                estado = "[OK]" if pred == real else "[ERROR]"
+                f.write(
+                    f"{i:3d}. Predicción: {pred:<15} "
+                    f"Real: {real:<15} {estado}\n"
+                )
+
+            matriz = reporte["matriz_confusion"]
+            clases = sorted(
+                set(matriz.keys()) |
+                {p for preds in matriz.values() for p in preds}
+            )
+
+            f.write("\n\n=== MATRIZ DE CONFUSIÓN ===\n")
+            f.write(f"{'Real/Pred':10}")
+
+            for clase in clases:
+                f.write(f"{clase:7}")
+            f.write("\n")
+            for real in clases:
+                f.write(f"{real:10}")
+                for pred in clases:
+                    count = matriz.get(real, {}).get(pred, 0)
+                    f.write(f"{count:7}")
+                f.write("\n")
+
+        print(f"  --> Guardado: {archivo}")
+
+
+    def mostrarResultados(self, reporte):
+        print("\n  === Resultados del Test ===")
+        print(f"  Instancias evaluadas: {reporte['total']}")
+        print(f"  Instancias correctamente clasificadas: {reporte['correctas']}")
+        print(f"  Precisión: {reporte['precision'] * 100:.2f}%")
+
+        matriz = reporte["matriz_confusion"]
+        clases = sorted( set(matriz.keys()) | {p for preds in matriz.values() for p in preds} )
+
+        print("\n\n  === MATRIZ DE CONFUSIÓN ===")
+        print(f"  {'Real/Pred':{12}}", end="")
+
+        for clase in clases:
+            print(f"{str(clase):{9}}", end="")
+        for real in clases:
+            print(f"\n  {str(real):<{12}}", end="")
+            for pred in clases:
+                count = matriz.get(real, {}).get(pred, 0)
+                print(f"{count:<{9}}", end="")
+             
 
 # MAIN ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -305,6 +401,7 @@ def main():
     # 2. Dividir dataset
       print("\n[2] Dividiendo dataset (80% train / 20% test)...")
       train, test = modelo.dividirDataset(test_ratio=0.2, semilla=42)
+      print("\n  Guardando datasets divididos en CSV...")
       modelo.guardarCSV(train, "wine_train.csv")
       modelo.guardarCSV(test,  "wine_test.csv")
  
@@ -317,6 +414,14 @@ def main():
       print(f"  Hojas         : {hojas}")
       print(f"  Profundidad   : {prof}")
       modelo.printTree()
+
+    # 4. Evaluar en test
+      print("\n[4] Evaluando en set de test...")
+      reporte = modelo.clasificar(test)
+      print("\n  Guardando reporte de resultados...")
+      modelo.guardarResultados(reporte, archivo="reporte_test.txt")
+      modelo.mostrarResultados(reporte)
+    
 
 if __name__ == "__main__":
         main()
