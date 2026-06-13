@@ -10,11 +10,14 @@ from collections import Counter # es una clase que nos permite contar instancias
 # hijos
   
 class Nodo:
-    def __init__(self, esHoja, etiqueta, umbral):
+    def __init__(self, esHoja, etiqueta, umbral, num_casos=0, num_errores=0, clase_mayoritaria=None):
         self.esHoja = esHoja
         self.etiqueta = etiqueta
         self.umbral = umbral
         self.hijos = []
+        self.num_casos = num_casos
+        self.num_errores = num_errores
+        self.clase_mayoritaria = clase_mayoritaria
     
     def predecir(self, instancia):
         if self.esHoja:
@@ -30,11 +33,12 @@ class Nodo:
 
 class C45:
     """Construye un arbol de decision con el algoritmo C4.5"""
-    def __init__(self):
+    def __init__(self, cf=0.25):
         self.data = []          # lista de instancias (cada una es un dict)
         self.atributos = []    # lista de nombres de atributos
         self.clases = []       # lista de clases posibles (ej: [1, 2, 3])
         self.arbol = None        # raíz del árbol (Node)
+        self.cf = cf            # nivel de confianza para la poda pesimista
 
 # Cargado de datos - dataset Wine id 109
 
@@ -82,8 +86,6 @@ class C45:
             
             por_clase[c].append(inst)
             
-            #Jere: No entendi que hacia la linea de abajo
-            #por_clase.setdefault(c, []).append(inst) # crea lista por clase 
  
         entrenamiento, test = [], []
         for clase, instancias in sorted(por_clase.items()): # recorre cada clase
@@ -119,9 +121,17 @@ class C45:
 # Construccion del arbol
 # recursivo desde la raiz
 
-    def generadorArbol(self,entrData):
-      """Construye el arbol usando el set de entrenamiento"""
-      self.arbol = self.genArbolRec(entrData,self.atributos[:])
+    def generadorArbol(self, entrData):
+        """Construye el arbol usando el set de entrenamiento y luego lo poda."""
+        self.arbol = self.genArbolRec(entrData, self.atributos[:])
+        total_pre, hojas_pre = self.contarNodos()
+        prof_pre = self.profundidad()
+        print(f"  Arbol antes de podar: {total_pre} nodos, {hojas_pre} hojas, profundidad {prof_pre}")
+        print("  Podando arbol (error pesimista)...")
+        self.arbol = self.podar(self.arbol)
+        total_post, hojas_post = self.contarNodos()
+        prof_post = self.profundidad()
+        print(f"  Arbol despues de podar: {total_post} nodos, {hojas_post} hojas, profundidad {prof_post}")
 
 # Funcion recursiva principal
 
@@ -136,28 +146,30 @@ class C45:
 # llamar recursivamente en cada subconjunto
 
     def genArbolRec(self, dataset, atr):
- 
+
+        n, e, cm = self._stats_dataset(dataset)
+
         # CASO BASE 1: no hay datos
         if len(dataset) == 0:
-            return Nodo(True, "Fail", None)
- 
+            return Nodo(True, "Fail", None, n, e, cm)
+
         # CASO BASE 2: todos son de la misma clase
         mismaClase = self.todosMismaClase(dataset)
         if mismaClase is not None:
-            return Nodo(True, mismaClase, None) # no se sigue dividiendo
- 
+            return Nodo(True, mismaClase, None, n, e, cm)
+
         # CASO BASE 3: no quedan atributos para dividir
         if len(atr) == 0:
             freqClass = self.getClaseFrecuente(dataset) # uso clase mayoritaria
-            return Nodo(True, freqClass, None) 
- 
+            return Nodo(True, freqClass, None, n, e, cm)
+
         # CASO RECURSIVO: elegir el mejor atributo y dividir
         mejorAtributo, mejorUmbral, subconjuntos = self.selectAtributo(dataset, atr)
- 
+
         # En C4.5 con atributos continuos, el atributo puede
         # reutilizarse en distintas ramas. Por eso NO lo removemos.
-        nodo = Nodo(False, mejorAtributo, mejorUmbral)
- 
+        nodo = Nodo(False, mejorAtributo, mejorUmbral, n, e, cm)
+
         # Crear un hijo por cada subconjunto (izquierdo y derecho)
         nodo.hijos = [
             self.genArbolRec(subset, atr)
@@ -166,6 +178,16 @@ class C45:
         return nodo
 
 # Metodos genArbolRec
+
+    def _stats_dataset(self, dataset):
+        """Retorna (num_casos, num_errores, clase_mayoritaria) para un conjunto de datos."""
+        if not dataset:
+            return 0, 0, None
+        conteo = Counter(row["class"] for row in dataset)
+        clase_mayoritaria = conteo.most_common(1)[0][0]
+        num_casos = len(dataset)
+        num_errores = num_casos - conteo[clase_mayoritaria]
+        return num_casos, num_errores, clase_mayoritaria
 
     def todosMismaClase(self, data):
         """Verifica si todos los datos son de la misma clase.Retorna la clase si son iguales, None si no."""
@@ -184,57 +206,56 @@ class C45:
 # para cada uno, probamos todos los umbrales posibles - medios entre valores adyacentes ordenados
 # se selecciona aquel atributo y umbral que maximizan el gain ratio
 
-    def selectAtributo(self, curData, curAttributes):
+    def selectAtributo(self, datos_actual, atributos_actuales):
         subconjuntos = []
-        maxGainRatio = -1 * float("inf")
-        best_attribute = None
-        best_umbral = None
+        gain_ratio_max = -1 * float("inf")
+        mejor_umbral = None
 
         # PRIMERA PASADA: mejor Information Gain por atributo
         mejoresGanancias = {}
-        for attribute in curAttributes:
-            curData.sort(key=lambda x: x[attribute])
+        for atributo in atributosActuales:
+            datosActual.sort(key=lambda x: x[atributo])
             mejorGain = -1 * float("inf")
 
-            for j in range(len(curData) - 1):
-                val_j      = curData[j][attribute]
-                val_j_next = curData[j + 1][attribute]
+            for j in range(len(datosActual) - 1):
+                val_j      = datosActual[j][atributo]
+                val_j_next = datosActual[j + 1][atributo]
 
                 if val_j != val_j_next:
-                    threshold = (val_j + val_j_next) / 2
-                    menor_igual = [row for row in curData if row[attribute] <= threshold]
-                    mayor = [row for row in curData if row[attribute] > threshold]
-                    ig = self.gain(curData, [menor_igual, mayor])
+                    umbral = (val_j + val_j_next) / 2
+                    menor_igual = [row for row in datosActual if row[atributo] <= umbral]
+                    mayor = [row for row in datosActual if row[atributo] > umbral]
+                    ig = self.gain(datosActual, [menor_igual, mayor])
                     if ig > mejorGain:
                         mejorGain = ig
 
-            mejoresGanancias[attribute] = mejorGain
+            mejoresGanancias[atributo] = mejorGain
 
-        promedioGanancias = sum(mejoresGanancias.values()) / len(mejoresGanancias) if curAttributes else 0
+        promedioGanancias = sum(mejoresGanancias.values()) / len(mejoresGanancias) if atributosActuales else 0
 
         # SEGUNDA PASADA: Gain Ratio solo para atributos que superen el promedio
-        for attribute in curAttributes:
-            curData.sort(key=lambda x: x[attribute])
+        for atributo in atributosActuales:
+            datosActual.sort(key=lambda x: x[atributo])
 
-            for j in range(len(curData) - 1):
-                val_j      = curData[j][attribute]
-                val_j_next = curData[j + 1][attribute]
+            for j in range(len(datosActual) - 1):
+                val_j      = datosActual[j][atributo]
+                val_j_next = datosActual[j + 1][atributo]
 
                 if val_j != val_j_next:
-                    threshold = (val_j + val_j_next) / 2
+                    umbral = (val_j + val_j_next) / 2
 
-                    menor_igual = [row for row in curData if row[attribute] <= threshold]
-                    mayor = [row for row in curData if row[attribute] > threshold]
+                    menor_igual = [row for row in datosActual if row[atributo] <= umbral]
+                    mayor = [row for row in datosActual if row[atributo] > umbral]
 
-                    e = self.calcularGanancia(curData, [menor_igual, mayor], mejoresGanancias[attribute], promedioGanancias)
+                    e = self.calcularGanancia(datosActual, [menor_igual, mayor], mejoresGanancias[atributo], promedioGanancias)
 
-                    if e >= maxGainRatio:
-                        maxGainRatio = e
+                    if e >= gain_ratio_max:
+                        gain_ratio_max = e
                         subconjuntos = [menor_igual, mayor]
-                        best_attribute = attribute
-                        best_umbral = threshold
+                        mejor_atributo = atributo
+                        mejor_umbral = umbral
 
-        return (best_attribute, best_umbral, subconjuntos)
+        return (mejor_atributo, mejor_umbral, subconjuntos)
  
 # Gain / Gain Ratio
 
@@ -304,7 +325,54 @@ class C45:
             return 0
         return math.log(x, 2)
 
-# PREDICCIÓN --------------------------------------
+# PODA PESIMISTA ----------------------------------
+
+    def _tasa_error_pesimista(self, N, E):
+        """Calcula el limite superior del intervalo de confianza binomial
+        (tasa de error pesimista)."""
+        if N == 0:
+            return 0
+        from statistics import NormalDist
+        z = abs(NormalDist().inv_cdf(self.cf))
+        p_obs = E / N
+        z2 = z * z
+        aux = z * math.sqrt(p_obs * (1.0 - p_obs) / N + z2 / (4.0 * N * N))
+        denom = 1.0 + z2 / N
+        p_upper = (p_obs + z2 / (2.0 * N) + aux) / denom
+        p_upper = min(p_upper, 1.0)
+        return N * p_upper
+
+    def _error_subarbol(self, nodo):
+        """Error estimado de un subarbol (suma de errores de sus hojas/ramas)."""
+        if nodo.esHoja:
+            return self._tasa_error_pesimista(nodo.num_casos, nodo.num_errores)
+        return sum(self._error_subarbol(hijo) for hijo in nodo.hijos)
+
+    def _error_hoja(self, nodo):
+        """Error estimado si el nodo se reemplaza por una hoja."""
+        return self._tasa_error_pesimista(nodo.num_casos, nodo.num_errores)
+
+    def podar(self, nodo):
+        """Poda el arbol bottom-up usando el error pesimista.
+        Realiza subtree replacement: si el error estimado como hoja
+        no supera al error del subarbol, se reemplaza por una hoja."""
+        if nodo is None or nodo.esHoja:
+            return nodo
+
+        # Podar hijos primero (bottom-up)
+        nodo.hijos = [self.podar(hijo) for hijo in nodo.hijos]
+
+        error_subarbol = self._error_subarbol(nodo)
+        error_hoja = self._error_hoja(nodo)
+
+        if error_hoja <= error_subarbol:
+            return Nodo(
+                True, nodo.clase_mayoritaria, None,
+                nodo.num_casos, nodo.num_errores, nodo.clase_mayoritaria
+            )
+
+        return nodo
+        
     def clasificar(self, test_data):
         """Evalúa el árbol en el set de test y retorna un reporte con precisión, matriz de confusión, etc."""
         correctas = 0
@@ -314,7 +382,7 @@ class C45:
         
         for inst in test_data:
             real = inst["class"]
-            pred = self.arbol.predecir(inst)x
+            pred = self.arbol.predecir(inst)
             resultados.append((pred, real))
             
             if real not in matriz_confusion:
@@ -448,11 +516,6 @@ def main():
     # 3. Construir árbol
       print("\n[3] Construyendo árbol C4.5...")
       modelo.generadorArbol(train)
-      total, hojas = modelo.contarNodos()
-      prof = modelo.profundidad()
-      print(f"  Nodos totales : {total}")
-      print(f"  Hojas         : {hojas}")
-      print(f"  Profundidad   : {prof}")
       modelo.printTree()
 
     # 4. Evaluar en test
