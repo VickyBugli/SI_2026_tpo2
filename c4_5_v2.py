@@ -86,6 +86,8 @@ class C45:
             
             por_clase[c].append(inst)
             
+            #Jere: No entendi que hacia la linea de abajo
+            #por_clase.setdefault(c, []).append(inst) # crea lista por clase 
  
         entrenamiento, test = [], []
         for clase, instancias in sorted(por_clase.items()): # recorre cada clase
@@ -206,56 +208,57 @@ class C45:
 # para cada uno, probamos todos los umbrales posibles - medios entre valores adyacentes ordenados
 # se selecciona aquel atributo y umbral que maximizan el gain ratio
 
-    def selectAtributo(self, datos_actual, atributos_actuales):
+    def selectAtributo(self, curData, curAttributes):
         subconjuntos = []
-        gain_ratio_max = -1 * float("inf")
-        mejor_umbral = None
+        maxGainRatio = -1 * float("inf")
+        best_attribute = None
+        best_umbral = None
 
         # PRIMERA PASADA: mejor Information Gain por atributo
         mejoresGanancias = {}
-        for atributo in atributosActuales:
-            datosActual.sort(key=lambda x: x[atributo])
+        for attribute in curAttributes:
+            curData.sort(key=lambda x: x[attribute])
             mejorGain = -1 * float("inf")
 
-            for j in range(len(datosActual) - 1):
-                val_j      = datosActual[j][atributo]
-                val_j_next = datosActual[j + 1][atributo]
+            for j in range(len(curData) - 1):
+                val_j      = curData[j][attribute]
+                val_j_next = curData[j + 1][attribute]
 
                 if val_j != val_j_next:
-                    umbral = (val_j + val_j_next) / 2
-                    menor_igual = [row for row in datosActual if row[atributo] <= umbral]
-                    mayor = [row for row in datosActual if row[atributo] > umbral]
-                    ig = self.gain(datosActual, [menor_igual, mayor])
+                    threshold = (val_j + val_j_next) / 2
+                    menor_igual = [row for row in curData if row[attribute] <= threshold]
+                    mayor = [row for row in curData if row[attribute] > threshold]
+                    ig = self.gain(curData, [menor_igual, mayor])
                     if ig > mejorGain:
                         mejorGain = ig
 
-            mejoresGanancias[atributo] = mejorGain
+            mejoresGanancias[attribute] = mejorGain
 
-        promedioGanancias = sum(mejoresGanancias.values()) / len(mejoresGanancias) if atributosActuales else 0
+        promedioGanancias = sum(mejoresGanancias.values()) / len(mejoresGanancias) if curAttributes else 0
 
         # SEGUNDA PASADA: Gain Ratio solo para atributos que superen el promedio
-        for atributo in atributosActuales:
-            datosActual.sort(key=lambda x: x[atributo])
+        for attribute in curAttributes:
+            curData.sort(key=lambda x: x[attribute])
 
-            for j in range(len(datosActual) - 1):
-                val_j      = datosActual[j][atributo]
-                val_j_next = datosActual[j + 1][atributo]
+            for j in range(len(curData) - 1):
+                val_j      = curData[j][attribute]
+                val_j_next = curData[j + 1][attribute]
 
                 if val_j != val_j_next:
-                    umbral = (val_j + val_j_next) / 2
+                    threshold = (val_j + val_j_next) / 2
 
-                    menor_igual = [row for row in datosActual if row[atributo] <= umbral]
-                    mayor = [row for row in datosActual if row[atributo] > umbral]
+                    menor_igual = [row for row in curData if row[attribute] <= threshold]
+                    mayor = [row for row in curData if row[attribute] > threshold]
 
-                    e = self.calcularGanancia(datosActual, [menor_igual, mayor], mejoresGanancias[atributo], promedioGanancias)
+                    e = self.calcularGanancia(curData, [menor_igual, mayor], mejoresGanancias[attribute], promedioGanancias)
 
-                    if e >= gain_ratio_max:
-                        gain_ratio_max = e
+                    if e >= maxGainRatio:
+                        maxGainRatio = e
                         subconjuntos = [menor_igual, mayor]
-                        mejor_atributo = atributo
-                        mejor_umbral = umbral
+                        best_attribute = attribute
+                        best_umbral = threshold
 
-        return (mejor_atributo, mejor_umbral, subconjuntos)
+        return (best_attribute, best_umbral, subconjuntos)
  
 # Gain / Gain Ratio
 
@@ -329,7 +332,7 @@ class C45:
 
     def _tasa_error_pesimista(self, N, E):
         """Calcula el limite superior del intervalo de confianza binomial
-        (tasa de error pesimista)."""
+        (tasa de error pesimista) usando la aproximacion de Wilson."""
         if N == 0:
             return 0
         from statistics import NormalDist
@@ -372,7 +375,6 @@ class C45:
             )
 
         return nodo
-        
     def clasificar(self, test_data):
         """Evalúa el árbol en el set de test y retorna un reporte con precisión, matriz de confusión, etc."""
         correctas = 0

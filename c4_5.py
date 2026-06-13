@@ -314,7 +314,7 @@ class C45:
         
         for inst in test_data:
             real = inst["class"]
-            pred = self.arbol.predecir(inst)x
+            pred = self.arbol.predecir(inst)
             resultados.append((pred, real))
             
             if real not in matriz_confusion:
