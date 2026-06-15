@@ -10,14 +10,11 @@ from collections import Counter # es una clase que nos permite contar instancias
 # hijos
   
 class Nodo:
-    def __init__(self, esHoja, etiqueta, umbral, num_casos=0, num_errores=0, clase_mayoritaria=None):
+    def __init__(self, esHoja, etiqueta, umbral):
         self.esHoja = esHoja
         self.etiqueta = etiqueta
         self.umbral = umbral
         self.hijos = []
-        self.num_casos = num_casos
-        self.num_errores = num_errores
-        self.clase_mayoritaria = clase_mayoritaria
     
     def predecir(self, instancia):
         if self.esHoja:
@@ -33,12 +30,11 @@ class Nodo:
 
 class C45:
     """Construye un arbol de decision con el algoritmo C4.5"""
-    def __init__(self, cf=0.25):
+    def __init__(self):
         self.data = []          # lista de instancias (cada una es un dict)
         self.atributos = []    # lista de nombres de atributos
         self.clases = []       # lista de clases posibles (ej: [1, 2, 3])
         self.arbol = None        # raíz del árbol (Node)
-        self.cf = cf            # nivel de confianza para la poda pesimista
 
 # Cargado de datos - dataset Wine id 109
 
@@ -123,17 +119,9 @@ class C45:
 # Construccion del arbol
 # recursivo desde la raiz
 
-    def generadorArbol(self, entrData):
-        """Construye el arbol usando el set de entrenamiento y luego lo poda."""
-        self.arbol = self.genArbolRec(entrData, self.atributos[:])
-        total_pre, hojas_pre = self.contarNodos()
-        prof_pre = self.profundidad()
-        print(f"  Arbol antes de podar: {total_pre} nodos, {hojas_pre} hojas, profundidad {prof_pre}")
-        print("  Podando arbol (error pesimista)...")
-        self.arbol = self.podar(self.arbol)
-        total_post, hojas_post = self.contarNodos()
-        prof_post = self.profundidad()
-        print(f"  Arbol despues de podar: {total_post} nodos, {hojas_post} hojas, profundidad {prof_post}")
+    def generadorArbol(self,entrData):
+      """Construye el arbol usando el set de entrenamiento"""
+      self.arbol = self.genArbolRec(entrData,self.atributos[:])
 
 # Funcion recursiva principal
 
@@ -148,30 +136,28 @@ class C45:
 # llamar recursivamente en cada subconjunto
 
     def genArbolRec(self, dataset, atr):
-
-        n, e, cm = self._stats_dataset(dataset)
-
+ 
         # CASO BASE 1: no hay datos
         if len(dataset) == 0:
-            return Nodo(True, "Fail", None, n, e, cm)
-
+            return Nodo(True, "Fail", None)
+ 
         # CASO BASE 2: todos son de la misma clase
         mismaClase = self.todosMismaClase(dataset)
         if mismaClase is not None:
-            return Nodo(True, mismaClase, None, n, e, cm)
-
+            return Nodo(True, mismaClase, None) # no se sigue dividiendo
+ 
         # CASO BASE 3: no quedan atributos para dividir
         if len(atr) == 0:
             freqClass = self.getClaseFrecuente(dataset) # uso clase mayoritaria
-            return Nodo(True, freqClass, None, n, e, cm)
-
+            return Nodo(True, freqClass, None) 
+ 
         # CASO RECURSIVO: elegir el mejor atributo y dividir
         mejorAtributo, mejorUmbral, subconjuntos = self.selectAtributo(dataset, atr)
-
+ 
         # En C4.5 con atributos continuos, el atributo puede
         # reutilizarse en distintas ramas. Por eso NO lo removemos.
-        nodo = Nodo(False, mejorAtributo, mejorUmbral, n, e, cm)
-
+        nodo = Nodo(False, mejorAtributo, mejorUmbral)
+ 
         # Crear un hijo por cada subconjunto (izquierdo y derecho)
         nodo.hijos = [
             self.genArbolRec(subset, atr)
@@ -180,16 +166,6 @@ class C45:
         return nodo
 
 # Metodos genArbolRec
-
-    def _stats_dataset(self, dataset):
-        """Retorna (num_casos, num_errores, clase_mayoritaria) para un conjunto de datos."""
-        if not dataset:
-            return 0, 0, None
-        conteo = Counter(row["class"] for row in dataset)
-        clase_mayoritaria = conteo.most_common(1)[0][0]
-        num_casos = len(dataset)
-        num_errores = num_casos - conteo[clase_mayoritaria]
-        return num_casos, num_errores, clase_mayoritaria
 
     def todosMismaClase(self, data):
         """Verifica si todos los datos son de la misma clase.Retorna la clase si son iguales, None si no."""
@@ -328,53 +304,7 @@ class C45:
             return 0
         return math.log(x, 2)
 
-# PODA PESIMISTA ----------------------------------
-
-    def _tasa_error_pesimista(self, N, E):
-        """Calcula el limite superior del intervalo de confianza binomial
-        (tasa de error pesimista) usando la aproximacion de Wilson."""
-        if N == 0:
-            return 0
-        from statistics import NormalDist
-        z = abs(NormalDist().inv_cdf(self.cf))
-        p_obs = E / N
-        z2 = z * z
-        aux = z * math.sqrt(p_obs * (1.0 - p_obs) / N + z2 / (4.0 * N * N))
-        denom = 1.0 + z2 / N
-        p_upper = (p_obs + z2 / (2.0 * N) + aux) / denom
-        p_upper = min(p_upper, 1.0)
-        return N * p_upper
-
-    def _error_subarbol(self, nodo):
-        """Error estimado de un subarbol (suma de errores de sus hojas/ramas)."""
-        if nodo.esHoja:
-            return self._tasa_error_pesimista(nodo.num_casos, nodo.num_errores)
-        return sum(self._error_subarbol(hijo) for hijo in nodo.hijos)
-
-    def _error_hoja(self, nodo):
-        """Error estimado si el nodo se reemplaza por una hoja."""
-        return self._tasa_error_pesimista(nodo.num_casos, nodo.num_errores)
-
-    def podar(self, nodo):
-        """Poda el arbol bottom-up usando el error pesimista.
-        Realiza subtree replacement: si el error estimado como hoja
-        no supera al error del subarbol, se reemplaza por una hoja."""
-        if nodo is None or nodo.esHoja:
-            return nodo
-
-        # Podar hijos primero (bottom-up)
-        nodo.hijos = [self.podar(hijo) for hijo in nodo.hijos]
-
-        error_subarbol = self._error_subarbol(nodo)
-        error_hoja = self._error_hoja(nodo)
-
-        if error_hoja <= error_subarbol:
-            return Nodo(
-                True, nodo.clase_mayoritaria, None,
-                nodo.num_casos, nodo.num_errores, nodo.clase_mayoritaria
-            )
-
-        return nodo
+# PREDICCIÓN --------------------------------------
     def clasificar(self, test_data):
         """Evalúa el árbol en el set de test y retorna un reporte con precisión, matriz de confusión, etc."""
         correctas = 0
@@ -518,6 +448,11 @@ def main():
     # 3. Construir árbol
       print("\n[3] Construyendo árbol C4.5...")
       modelo.generadorArbol(train)
+      total, hojas = modelo.contarNodos()
+      prof = modelo.profundidad()
+      print(f"  Nodos totales : {total}")
+      print(f"  Hojas         : {hojas}")
+      print(f"  Profundidad   : {prof}")
       modelo.printTree()
 
     # 4. Evaluar en test
